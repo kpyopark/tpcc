@@ -123,7 +123,7 @@ public class Driver implements TpccConstants {
 
                 if (DETECT_LOCK_WAIT_TIMEOUTS) {
                     final int _sequence = sequence;
-                    FutureTask t = new FutureTask<Object>(new Callable<Object>() {
+                    FutureTask<Object> t = new FutureTask<Object>(new Callable<Object>() {
                         public Object call() throws Exception {
                             doNextTransaction(t_num, _sequence);
                             return null;

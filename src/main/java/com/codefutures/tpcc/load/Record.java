@@ -17,11 +17,6 @@ public class Record {
      */
     private int index;
 
-    /**
-     * Re-usable buffer for building string representations of the row.
-     */
-    private final StringBuilder toStringBuilder = new StringBuilder();
-
     public Record(int columnCount) {
         this.field = new Object[columnCount];
     }

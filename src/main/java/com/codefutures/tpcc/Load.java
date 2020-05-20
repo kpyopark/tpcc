@@ -114,7 +114,6 @@ public class Load implements TpccConstants {
         double w_tax = 0;
         double w_ytd = 0;
 
-        int tmp = 0;
         //boolean retried = false;
         int currentShard = 0;
 

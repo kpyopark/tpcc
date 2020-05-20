@@ -9,7 +9,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -22,14 +21,14 @@ public class Tpcc implements TpccConstants {
 
     private static final String DRIVER = "DRIVER";
     private static final String WAREHOUSECOUNT = "WAREHOUSECOUNT";
-    private static final String DATABASE = "DATABASE";
+    // private static final String DATABASE = "DATABASE";
     private static final String USER = "USER";
     private static final String PASSWORD = "PASSWORD";
     private static final String CONNECTIONS = "CONNECTIONS";
     private static final String RAMPUPTIME = "RAMPUPTIME";
     private static final String DURATION = "DURATION";
     private static final String JDBCURL = "JDBCURL";
-    private static final String JOINS = "JOINS";
+    // private static final String JOINS = "JOINS";
 
 
     private static final String PROPERTIESFILE = "tpcc.properties";
