@@ -300,7 +300,7 @@ public class Tpcc implements TpccConstants {
                 totlate += late[i];
                 totretry += retry[i];    
             }
-            System.out.printf("time:elasped:success:failure:late:retry=%s:%d:%d:%d:%d:%d \n", new Date(newTime), df.format(runTime / 1000.0f), totsuccess, totfailure, totlate, totretry);
+            System.out.printf("time:elasped:success:failure:late:retry=%s:%s:%d:%d:%d:%d \n", new Date(newTime), df.format(runTime / 1000.0f), totsuccess, totfailure, totlate, totretry);
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
