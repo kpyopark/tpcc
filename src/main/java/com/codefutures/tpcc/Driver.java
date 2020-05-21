@@ -5,6 +5,8 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.concurrent.*;
 
+import javax.sql.DataSource;
+
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -47,8 +49,9 @@ public class Driver implements TpccConstants {
 
     public double[] max_rt = new double[TRANSACTION_COUNT];
 
-    //Private variables
-    private final int MAX_RETRY = 2000;
+    // For each transaction, if there would be MAX_RETRY errors, count of failure would be increased.
+    private final int MAX_RETRY = 3;
+    //Private variables - The below variables indicate the maximum latency for each task. 
     private final int RTIME_NEWORD = 5 * 1000;
     private final int RTIME_PAYMENT = 5 * 1000;
     private final int RTIME_ORDSTAT = 5 * 1000;
@@ -65,26 +68,35 @@ public class Driver implements TpccConstants {
     private Slev slev;
     private Delivery delivery;
 
+    DataSource ds = null;
+
+    int fetchSize = 0;
+    boolean joins = false;
+
+    private void initalizeConnection() throws Exception {
+        this.conn = ds.getConnection();
+        conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+        conn.setAutoCommit(false);
+
+        pStmts = new TpccStatements(conn, fetchSize);
+
+        // Initialize the transactions.
+        newOrder = new NewOrder(pStmts, joins);
+        payment = new Payment(pStmts);
+        orderStat = new OrderStat(pStmts);
+        slev = new Slev(pStmts);
+        delivery = new Delivery(pStmts);
+    }
+
     /**
      * Constructor.
      *
      * @param conn
      */
-    public Driver(Connection conn, int fetchSize,
+    public Driver(DataSource ds, int fetchSize,
                   int[] success, int[] late, int[] retry, int[] failure,
                   int[][] success2, int[][] late2, int[][] retry2, int[][] failure2, boolean joins) {
         try {
-            this.conn = conn;
-
-            pStmts = new TpccStatements(conn, fetchSize);
-
-            // Initialize the transactions.
-            newOrder = new NewOrder(pStmts, joins);
-            payment = new Payment(pStmts);
-            orderStat = new OrderStat(pStmts);
-            slev = new Slev(pStmts);
-            delivery = new Delivery(pStmts);
-
             this.success = success;
             this.late = late;
             this.retry = retry;
@@ -95,10 +107,15 @@ public class Driver implements TpccConstants {
             this.retry2 = retry2;
             this.failure2 = failure2;
 
+            this.ds = ds;
+            this.fetchSize = fetchSize;
+            this.joins = joins;
+
             for (int i = 0; i < TRANSACTION_COUNT; i++) {
                 max_rt[i] = 0.0;
             }
 
+            initalizeConnection();
         } catch (Throwable th) {
             throw new RuntimeException("Error initializing Driver", th);
         }
@@ -131,39 +148,49 @@ public class Driver implements TpccConstants {
                     });
                     exec.execute(t);
 
+                    // Modified. to continue the tasks after exceptions. 
                     try {
-                        t.get(15, TimeUnit.SECONDS);
+                        // 1000 seconds = 30 minutes. 
+                        t.get(1800, TimeUnit.SECONDS);
                     } catch (InterruptedException e) {
                         logger.error("InterruptedException", e);
-                        Tpcc.activate_transaction = 0;
+                        // Tpcc.activate_transaction = 0;
                     } catch (ExecutionException e) {
                         logger.error("Unhandled exception", e);
-                        Tpcc.activate_transaction = 0;
+                        // Tpcc.activate_transaction = 0;
                     } catch (TimeoutException e) {
                         logger.error("Detected Lock Wait", e);
-                        Tpcc.activate_transaction = 0;
+                        // Tpcc.activate_transaction = 0;
                     }
-
                 } else {
                     doNextTransaction(t_num, sequence);
                 }
-
                 count++;
             } catch (Throwable th) {
                 logger.error("FAILED", th);
-                Tpcc.activate_transaction = 0;
+                // Tpcc.activate_transaction = 0;
                 try {
-                    conn.rollback();
+                    // conn.rollback();
+                    conn.close();
                 } catch (SQLException e) {
                     logger.error("", e);
                 }
-                return -1;
+                boolean isInitialized = false;
+                while(!isInitialized) {
+                    try {
+                        initalizeConnection();
+                        isInitialized = true;
+                    } catch (Exception e) {
+                        logger.warn(
+                                "INITIALIZE CONNECTION ERROR. IT MIGHT BE THE LOST CONNECTION BETWEEN CLIENT AND HOST.");
+                        logger.warn(e.toString());
+                    }
+                }
+                // return -1;
             } finally {
                 if (DEBUG) logger.debug("AFTER runTransaction: sequence: " + sequence);
             }
-
             sequence = Util.seqGet();
-
         }
 
         logger.debug("Driver terminated after {} transactions", count);

@@ -1,14 +1,6 @@
 package com.codefutures.tpcc;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
 
 import javax.sql.DataSource;
 
@@ -23,22 +15,14 @@ public class TpccThread extends Thread {
     /**
      * Dedicated JDBC connection for this thread.
      */
+    Driver driver;
     Connection conn;
     DataSource ds;
-    Driver driver;
-
-    boolean isDsUsed = false;
 
     int number;
-    int port;
     int is_local;
     int num_ware;
     int num_conn;
-    String db_user;
-    String db_password;
-    String driverClassName;
-    String dataSourceClassName;
-    String jdbcUrl;
     int fetchSize;
 
     private int[] success;
@@ -55,21 +39,14 @@ public class TpccThread extends Thread {
 
     //TpccStatements pStmts;
 
-    public TpccThread(int number, int port, int is_local, String db_user, String db_password,
-                      int num_ware, int num_conn, String driverClassName, String dataSourceClassName, String dURL, int fetchSize,
+    public TpccThread(int number,
+                      int num_ware, int num_conn, DataSource ds , int fetchSize,
                       int[] success, int[] late, int[] retry, int[] failure,
                       int[][] success2, int[][] late2, int[][] retry2, int[][] failure2, boolean joins) {
 
         this.number = number;
-        this.port = port;
-        this.db_password = db_password;
-        this.db_user = db_user;
-        this.is_local = is_local;
         this.num_conn = num_conn;
         this.num_ware = num_ware;
-        this.driverClassName = driverClassName;
-        this.dataSourceClassName = dataSourceClassName;
-        this.jdbcUrl = dURL;
         this.fetchSize = fetchSize;
 
         this.success = success;
@@ -82,13 +59,9 @@ public class TpccThread extends Thread {
         this.retry2 = retry2;
         this.failure2 = failure2;
         this.joins = joins;
-
-        this.isDsUsed = this.dataSourceClassName != null;
-
-        connectToDatabase();
-
+        
         // Create a driver instance.
-        driver = new Driver(conn, fetchSize,
+        driver = new Driver(ds, fetchSize,
                 success, late, retry, failure,
                 success2, late2, retry2, failure2, joins);
 
@@ -109,99 +82,5 @@ public class TpccThread extends Thread {
 
     }
 
-    private Connection getConnection() throws SQLException {
-        
-        if (isDsUsed) {
-            return ds.getConnection();
-        } else {
-            return DriverManager.getConnection(jdbcUrl, prop);
-        }
-    }
-
-    private Properties makeJdbcProperties() {
-        Properties prop = new Properties();
-        File connPropFile = new File("conf/jdbc-connection.properties");
-        if (connPropFile.exists()) {
-            logger.info("Loading JDBC connection properties from " + connPropFile.getAbsolutePath());
-            try {
-                final FileInputStream is = new FileInputStream(connPropFile);
-                prop.load(is);
-                is.close();
-
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Connection properties: {");
-                    final Set<Map.Entry<Object, Object>> entries = prop.entrySet();
-                    for (Map.Entry<Object, Object> entry : entries) {
-                        logger.debug(entry.getKey() + " = " + entry.getValue());
-                    }
-
-                    logger.debug("}");
-                }
-
-            } catch (IOException e) {
-                logger.error("", e);
-            }
-        } else {
-            logger.warn(connPropFile.getAbsolutePath() + " does not exist! Using default connection properties");
-        }
-        prop.put("user", db_user);
-        prop.put("password", db_password);
-        return prop;
-    }
-
-    private void connectToDatabase() {
-
-        if (isDsUsed) {
-            logger.info("Connection to database: DatasSurce: " + dataSourceClassName + " url: " + jdbcUrl);
-
-        } else {
-            logger.info("Connection to database: driver: " + driverClassName + " url: " + jdbcUrl);
-            try {
-                Class.forName(driverClassName);
-            } catch (ClassNotFoundException e1) {
-                throw new RuntimeException("Failed to load JDBC driver class: " + driverClassName, e1);
-            }
-        }
-
-        try {
-
-            Properties prop = new Properties();
-            File connPropFile = new File("conf/jdbc-connection.properties");
-            if (connPropFile.exists()) {
-                logger.info("Loading JDBC connection properties from " + connPropFile.getAbsolutePath());
-                try {
-                    final FileInputStream is = new FileInputStream(connPropFile);
-                    prop.load(is);
-                    is.close();
-
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("Connection properties: {");
-                        final Set<Map.Entry<Object, Object>> entries = prop.entrySet();
-                        for (Map.Entry<Object, Object> entry : entries) {
-                            logger.debug(entry.getKey() + " = " + entry.getValue());
-                        }
-
-                        logger.debug("}");
-                    }
-
-                } catch (IOException e) {
-                    logger.error("", e);
-                }
-            } else {
-                logger.warn(connPropFile.getAbsolutePath() + " does not exist! Using default connection properties");
-            }
-            prop.put("user", db_user);
-            prop.put("password", db_password);
-
-
-            conn = DriverManager.getConnection(jdbcUrl, prop);
-            conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
-            conn.setAutoCommit(false);
-
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to connect to database", e);
-        }
-        return conn;
-    }
 }
 

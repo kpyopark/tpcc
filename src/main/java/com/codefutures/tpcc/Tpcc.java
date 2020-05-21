@@ -4,10 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
+import java.lang.reflect.Constructor;
 import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.Map;
@@ -20,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 
 import org.slf4j.LoggerFactory;
+import org.mariadb.jdbc.MariaDbPoolDataSource;
 import org.slf4j.Logger;
 
 public class Tpcc implements TpccConstants {
@@ -72,16 +70,15 @@ public class Tpcc implements TpccConstants {
     private int[][] failure2;
     public static volatile boolean counting_on = false;
 
-    private int[] success2_sum = new int[TRANSACTION_COUNT];
-    private int[] late2_sum = new int[TRANSACTION_COUNT];
-    private int[] retry2_sum = new int[TRANSACTION_COUNT];
-    private int[] failure2_sum = new int[TRANSACTION_COUNT];
+    private final int[] success2_sum = new int[TRANSACTION_COUNT];
+    private final int[] late2_sum = new int[TRANSACTION_COUNT];
+    private final int[] retry2_sum = new int[TRANSACTION_COUNT];
+    private final int[] failure2_sum = new int[TRANSACTION_COUNT];
 
-    private int[] prev_s = new int[5];
-    private int[] prev_l = new int[5];
+    private final int[] prev_s = new int[5];
+    private final int[] prev_l = new int[5];
 
-    private double[] max_rt = new double[5];
-    private int port = 3306;
+    private final double[] max_rt = new double[5];
 
     private Properties properties;
     private InputStream inputStream;
@@ -89,6 +86,7 @@ public class Tpcc implements TpccConstants {
     public static volatile int activate_transaction = 0;
 
     private Properties jdbcProps = null;
+    DataSource ds = null;
 
     public Tpcc() {
         // Empty.
@@ -101,48 +99,73 @@ public class Tpcc implements TpccConstants {
         try {
             inputStream = new FileInputStream(PROPERTIESFILE);
             properties.load(inputStream);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException("Error loading properties file", e);
         }
 
     }
 
-    private Properties makeJdbcProperties() {
-        Properties prop = new Properties();
-        File connPropFile = new File("conf/jdbc-connection.properties");
+    /**
+     * It's only used in the Driver Mode. In the DataSource mode, only jdbcUrl properties will be used.
+     * @return
+     */
+    private Properties makeJdbcDriverProperties() {
+        this.jdbcProps = new Properties();
+        jdbcProps.setProperty("user", dbUser);
+        jdbcProps.setProperty("password", dbPassword);
+        jdbcProps.setProperty("useServerPrepStmts", "true");
+        jdbcProps.setProperty("cachePrepStmts", "true");
+
+        final File connPropFile = new File("conf/jdbc-connection.properties");
         if (connPropFile.exists()) {
             logger.info("Loading JDBC connection properties from " + connPropFile.getAbsolutePath());
             try {
                 final FileInputStream is = new FileInputStream(connPropFile);
-                prop.load(is);
+                jdbcProps.load(is);
                 is.close();
 
                 if (logger.isDebugEnabled()) {
                     logger.debug("Connection properties: {");
-                    final Set<Map.Entry<Object, Object>> entries = prop.entrySet();
-                    for (Map.Entry<Object, Object> entry : entries) {
+                    final Set<Map.Entry<Object, Object>> entries = jdbcProps.entrySet();
+                    for (final Map.Entry<Object, Object> entry : entries) {
                         logger.debug(entry.getKey() + " = " + entry.getValue());
                     }
 
                     logger.debug("}");
                 }
 
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 logger.error("", e);
             }
         } else {
             logger.warn(connPropFile.getAbsolutePath() + " does not exist! Using default connection properties");
         }
-        prop.put("user", this.dbUser);
-        prop.put("password", this.dbPassword);
-        return prop;
+        return this.jdbcProps;
     }
 
-    private void printCurrentTransactions() {
-
+    private DataSource makeDataSource() {
+        if( jdbcDataSource != null ) {
+            try {
+                Constructor<DataSource> cstr = (Constructor<DataSource>)Class.forName(jdbcDataSource).getConstructor(new Class[0]);
+                this.ds = cstr.newInstance();
+                // Settting url / dbuser / password
+                // TODO : replace below codes with DataSourceBuilder class. 
+                if(this.ds instanceof org.mariadb.jdbc.MariaDbPoolDataSource) {
+                    MariaDbPoolDataSource mpds = (MariaDbPoolDataSource)this.ds;
+                    mpds.setUrl(this.jdbcUrl);
+                    mpds.setUser(this.dbUser);
+                    mpds.setPassword(this.dbPassword);
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(e.toString());
+            }
+            return this.ds;
+        } else {
+            return this.ds = new SimpleDriverDelegatorDataSource(javaDriver, this.jdbcUrl, this.jdbcProps);
+        }
     }
 
-    private int runBenchmark(boolean overridePropertiesFile, String[] argv) {
+    private int runBenchmark(final boolean overridePropertiesFile, final String[] argv) {
 
         System.out.println("***************************************");
         System.out.println("****** Java TPC-C Load Generator ******");
@@ -223,7 +246,7 @@ public class Tpcc implements TpccConstants {
             javaDriver = properties.getProperty(DRIVER);
             jdbcDataSource = properties.getProperty(DATASOURCE);
             jdbcUrl = properties.getProperty(JDBCURL);
-            String jdbcFetchSize = properties.getProperty("JDBCFETCHSIZE");
+            final String jdbcFetchSize = properties.getProperty("JDBCFETCHSIZE");
             //joins = Boolean.parseBoolean(properties.getProperty(JOINS));
 
             if (jdbcFetchSize != null) {
@@ -295,19 +318,20 @@ public class Tpcc implements TpccConstants {
 
         Util.seqInit(10, 10, 1, 1, 1);
 
-        /* set up database connection */
-        jdbcProps = makeJdbcProperties();
+        /* set up database datasource */
+        makeJdbcDriverProperties();
+        makeDataSource();
 
         /* set up threads */
 
         if (DEBUG) logger.debug("Creating TpccThread");
-        ExecutorService executor = Executors.newFixedThreadPool(numConn, new NamedThreadFactory("tpcc-thread"));
+        final ExecutorService executor = Executors.newFixedThreadPool(numConn, new NamedThreadFactory("tpcc-thread"));
 
         // Start each server.
 
         for (int i = 0; i < numConn; i++) {
-            Runnable worker = new TpccThread(i, port, 1, dbUser, dbPassword, numWare, numConn,
-                    javaDriver, jdbcDataSource, jdbcUrl, fetchSize,
+            final Runnable worker = new TpccThread(i, numWare, numConn,
+                    ds, fetchSize,
                     success, late, retry, failure, success2, late2, retry2, failure2, joins);
             executor.execute(worker);
         }
@@ -317,7 +341,7 @@ public class Tpcc implements TpccConstants {
             System.out.printf("\nRAMPUP START.\n\n");
             try {
                 Thread.sleep(rampupTime * 1000);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 logger.error("Rampup wait interrupted", e);
             }
             System.out.printf("\nRAMPUP END.\n\n");
@@ -331,7 +355,7 @@ public class Tpcc implements TpccConstants {
 
         // loop for the measure_time
         final long startTime = System.currentTimeMillis();
-        DecimalFormat df = new DecimalFormat("#,##0.0");
+        final DecimalFormat df = new DecimalFormat("#,##0.0");
         long runTime = 0;
         long newTime = 0;
         int totsuccess, totfailure, totlate, totretry;
@@ -347,7 +371,7 @@ public class Tpcc implements TpccConstants {
             System.out.printf("time:elasped:success:failure:late:retry=%s:%s:%d:%d:%d:%d \n", new Date(newTime), df.format(runTime / 1000.0f), totsuccess, totfailure, totlate, totretry);
             try {
                 Thread.sleep(1000);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 logger.error("Sleep interrupted", e);
             }
         }
@@ -445,7 +469,7 @@ public class Tpcc implements TpccConstants {
             System.out.println(" " + TRANSACTION_NAME[j] + " Total: " + (success[j] + late[j]));
         }
 
-        float tpcm = (success[0] + late[0]) * 60000f / actualTestTime;
+        final float tpcm = (success[0] + late[0]) * 60000f / actualTestTime;
 
         System.out.println();
         System.out.println("<TpmC>");
@@ -458,7 +482,7 @@ public class Tpcc implements TpccConstants {
         executor.shutdown();
         try {
             executor.awaitTermination(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             System.out.println("Timed out waiting for executor to terminate");
         }
 
@@ -468,13 +492,13 @@ public class Tpcc implements TpccConstants {
 
     }
 
-    public static void main(String[] argv) {
+    public static void main(final String[] argv) {
 
         System.out.println("TPCC version " + VERSION + " Number of Arguments: " + argv.length);
 
 
         // dump information about the environment we are running in
-        String sysProp[] = {
+        final String sysProp[] = {
                 "os.name",
                 "os.arch",
                 "os.version",
@@ -483,14 +507,14 @@ public class Tpcc implements TpccConstants {
                 "java.library.path"
         };
 
-        for (String s : sysProp) {
+        for (final String s : sysProp) {
             logger.info("System Property: " + s + " = " + System.getProperty(s));
         }
 
-        DecimalFormat df = new DecimalFormat("#,##0.0");
+        final DecimalFormat df = new DecimalFormat("#,##0.0");
         System.out.println("maxMemory = " + df.format(Runtime.getRuntime().totalMemory() / (1024.0 * 1024.0)) + " MB");
 
-        Tpcc tpcc = new Tpcc();
+        final Tpcc tpcc = new Tpcc();
 
         int ret = 0;
 
