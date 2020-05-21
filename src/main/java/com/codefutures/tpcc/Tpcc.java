@@ -43,7 +43,7 @@ public class Tpcc implements TpccConstants {
 
     /* Global SQL Variables */
 
-    private String javaDriver;
+    private String jdbcDriver;
     private String jdbcDataSource;
     private String jdbcUrl;
     private String dbUser;
@@ -161,7 +161,7 @@ public class Tpcc implements TpccConstants {
             }
             return this.ds;
         } else {
-            return this.ds = new SimpleDriverDelegatorDataSource(javaDriver, this.jdbcUrl, this.jdbcProps);
+            return this.ds = new SimpleDriverDelegatorDataSource(jdbcDriver, this.jdbcUrl, this.jdbcProps);
         }
     }
 
@@ -206,9 +206,9 @@ public class Tpcc implements TpccConstants {
                 } else if (argv[i].equals("-t")) {
                     measureTime = Integer.parseInt(argv[i + 1]);
                 } else if (argv[i].equals("-j")) {
-                    javaDriver = argv[i + 1];                
+                    jdbcDriver = argv[i + 1];                
                 } else if (argv[i].equals("-d")) {
-                        javaDriver = argv[i + 1];
+                        jdbcDriver = argv[i + 1];
                 } else if (argv[i].equals("-l")) {
                     jdbcUrl = argv[i + 1];
                 } else if (argv[i].equals("-f")) {
@@ -243,7 +243,7 @@ public class Tpcc implements TpccConstants {
             numConn = Integer.parseInt(properties.getProperty(CONNECTIONS));
             rampupTime = Integer.parseInt(properties.getProperty(RAMPUPTIME));
             measureTime = Integer.parseInt(properties.getProperty(DURATION));
-            javaDriver = properties.getProperty(DRIVER);
+            jdbcDriver = properties.getProperty(DRIVER);
             jdbcDataSource = properties.getProperty(DATASOURCE);
             jdbcUrl = properties.getProperty(JDBCURL);
             final String jdbcFetchSize = properties.getProperty("JDBCFETCHSIZE");
@@ -266,8 +266,8 @@ public class Tpcc implements TpccConstants {
         }
 
 
-        if (javaDriver == null) {
-            throw new RuntimeException("Java Driver is null.");
+        if (jdbcDriver == null && jdbcDataSource == null) {
+            throw new RuntimeException("Java Driver and jdbcDataSource is null.");
         }
         if (jdbcUrl == null) {
             throw new RuntimeException("JDBC Url is null.");
@@ -302,7 +302,7 @@ public class Tpcc implements TpccConstants {
 
         System.out.printf("<Parameters>\n");
 
-        System.out.printf("     [driver]: %s\n", javaDriver);
+        System.out.printf("     [driver]: %s\n", jdbcDriver);
         System.out.printf(" [datasource]: %s\n", jdbcDataSource);
         System.out.printf("        [URL]: %s\n", jdbcUrl);
         System.out.printf("       [user]: %s\n", dbUser);
