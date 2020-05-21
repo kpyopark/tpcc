@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.DecimalFormat;
+import java.util.Date;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -288,9 +289,10 @@ public class Tpcc implements TpccConstants {
         final long startTime = System.currentTimeMillis();
         DecimalFormat df = new DecimalFormat("#,##0.0");
         long runTime = 0;
+        long newTime = 0;
         int totsuccess, totfailure, totlate, totretry;
-        while ((runTime = System.currentTimeMillis() - startTime) < measureTime * 1000) {
-            System.out.println("Current execution time lapse: " + df.format(runTime / 1000.0f) + " seconds");
+        while ((runTime = (newTime = System.currentTimeMillis()) - startTime) < measureTime * 1000) {
+            // System.out.println("Current execution time lapse: " + df.format(runTime / 1000.0f) + " seconds");
             totsuccess = totfailure = totlate = totretry = 0;
             for (int i = 0; i < TRANSACTION_COUNT; i++) {
                 totsuccess += success[i];
@@ -298,7 +300,7 @@ public class Tpcc implements TpccConstants {
                 totlate += late[i];
                 totretry += retry[i];    
             }
-            System.out.printf("success:failure:late:retry=%d:%d:%d:%d \n", totsuccess, totfailure, totlate, totretry);
+            System.out.printf("time:elasped:success:failure:late:retry=%s:%d:%d:%d:%d:%d \n", new Date(newTime), df.format(runTime / 1000.0f), totsuccess, totfailure, totlate, totretry);
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
