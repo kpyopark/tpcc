@@ -99,6 +99,11 @@ public class Tpcc implements TpccConstants {
     }
 
 
+    private void printCurrentTransactions() {
+
+    }
+
+
     private int runBenchmark(boolean overridePropertiesFile, String[] argv) {
 
         System.out.println("***************************************");
@@ -283,8 +288,17 @@ public class Tpcc implements TpccConstants {
         final long startTime = System.currentTimeMillis();
         DecimalFormat df = new DecimalFormat("#,##0.0");
         long runTime = 0;
+        int totsuccess, totfailure, totlate, totretry;
         while ((runTime = System.currentTimeMillis() - startTime) < measureTime * 1000) {
             System.out.println("Current execution time lapse: " + df.format(runTime / 1000.0f) + " seconds");
+            totsuccess = totfailure = totlate = totretry = 0;
+            for (int i = 0; i < TRANSACTION_COUNT; i++) {
+                totsuccess += success[i];
+                totfailure += failure[i];
+                totlate += late[i];
+                totretry += retry[i];    
+            }
+            System.out.printf("success:failure:late:retry=%d:%d:%d:%d", totsuccess, totfailure, totlate, totretry);
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
