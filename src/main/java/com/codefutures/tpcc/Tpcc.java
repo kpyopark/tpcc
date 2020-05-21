@@ -1,14 +1,23 @@
 package com.codefutures.tpcc;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.text.DecimalFormat;
 import java.util.Date;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import javax.sql.DataSource;
 
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
@@ -21,6 +30,7 @@ public class Tpcc implements TpccConstants {
     public static final String VERSION = "1.0.1";
 
     private static final String DRIVER = "DRIVER";
+    private static final String DATASOURCE = "DATASOURCE";
     private static final String WAREHOUSECOUNT = "WAREHOUSECOUNT";
     // private static final String DATABASE = "DATABASE";
     private static final String USER = "USER";
@@ -31,18 +41,16 @@ public class Tpcc implements TpccConstants {
     private static final String JDBCURL = "JDBCURL";
     // private static final String JOINS = "JOINS";
 
-
     private static final String PROPERTIESFILE = "tpcc.properties";
-    
 
     /* Global SQL Variables */
 
     private String javaDriver;
+    private String jdbcDataSource;
     private String jdbcUrl;
     private String dbUser;
     private String dbPassword;
     private final boolean joins = true;
-
 
     private int numWare;
     private int numConn;
@@ -50,8 +58,8 @@ public class Tpcc implements TpccConstants {
     private int measureTime;
     private int fetchSize = 100;
 
-    private int num_node; /* number of servers that consists of cluster i.e. RAC (0:normal mode)*/
-    private static final String TRANSACTION_NAME[] = {"NewOrder", "Payment", "Order Stat", "Delivery", "Slev"};
+    private int num_node; /* number of servers that consists of cluster i.e. RAC (0:normal mode) */
+    private static final String TRANSACTION_NAME[] = { "NewOrder", "Payment", "Order Stat", "Delivery", "Slev" };
 
     private final int[] success = new int[TRANSACTION_COUNT];
     private final int[] late = new int[TRANSACTION_COUNT];
@@ -69,7 +77,6 @@ public class Tpcc implements TpccConstants {
     private int[] retry2_sum = new int[TRANSACTION_COUNT];
     private int[] failure2_sum = new int[TRANSACTION_COUNT];
 
-
     private int[] prev_s = new int[5];
     private int[] prev_l = new int[5];
 
@@ -81,10 +88,11 @@ public class Tpcc implements TpccConstants {
 
     public static volatile int activate_transaction = 0;
 
+    private Properties jdbcProps = null;
+
     public Tpcc() {
         // Empty.
     }
-
 
     private void init() {
         logger.info("Loading properties from: " + PROPERTIESFILE);
@@ -99,11 +107,40 @@ public class Tpcc implements TpccConstants {
 
     }
 
+    private Properties makeJdbcProperties() {
+        Properties prop = new Properties();
+        File connPropFile = new File("conf/jdbc-connection.properties");
+        if (connPropFile.exists()) {
+            logger.info("Loading JDBC connection properties from " + connPropFile.getAbsolutePath());
+            try {
+                final FileInputStream is = new FileInputStream(connPropFile);
+                prop.load(is);
+                is.close();
+
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Connection properties: {");
+                    final Set<Map.Entry<Object, Object>> entries = prop.entrySet();
+                    for (Map.Entry<Object, Object> entry : entries) {
+                        logger.debug(entry.getKey() + " = " + entry.getValue());
+                    }
+
+                    logger.debug("}");
+                }
+
+            } catch (IOException e) {
+                logger.error("", e);
+            }
+        } else {
+            logger.warn(connPropFile.getAbsolutePath() + " does not exist! Using default connection properties");
+        }
+        prop.put("user", this.dbUser);
+        prop.put("password", this.dbPassword);
+        return prop;
+    }
 
     private void printCurrentTransactions() {
 
     }
-
 
     private int runBenchmark(boolean overridePropertiesFile, String[] argv) {
 
@@ -146,7 +183,9 @@ public class Tpcc implements TpccConstants {
                 } else if (argv[i].equals("-t")) {
                     measureTime = Integer.parseInt(argv[i + 1]);
                 } else if (argv[i].equals("-j")) {
-                    javaDriver = argv[i + 1];
+                    javaDriver = argv[i + 1];                
+                } else if (argv[i].equals("-d")) {
+                        javaDriver = argv[i + 1];
                 } else if (argv[i].equals("-l")) {
                     jdbcUrl = argv[i + 1];
                 } else if (argv[i].equals("-f")) {
@@ -164,7 +203,8 @@ public class Tpcc implements TpccConstants {
                     System.out.println("-c [number of connections]");
                     System.out.println("-r [ramp up time]");
                     System.out.println("-t [duration of the benchmark (sec)]");
-                    System.out.println("-j [java driver]");
+                    System.out.println("-j [jdbc driver]");
+                    System.out.println("-d [jdbc datasource]");
                     System.out.println("-l [jdbc url]");
                     System.out.println("-h [jdbc fetch size]");
                     System.out.println("-J [joins (true|false) default true]");
@@ -181,6 +221,7 @@ public class Tpcc implements TpccConstants {
             rampupTime = Integer.parseInt(properties.getProperty(RAMPUPTIME));
             measureTime = Integer.parseInt(properties.getProperty(DURATION));
             javaDriver = properties.getProperty(DRIVER);
+            jdbcDataSource = properties.getProperty(DATASOURCE);
             jdbcUrl = properties.getProperty(JDBCURL);
             String jdbcFetchSize = properties.getProperty("JDBCFETCHSIZE");
             //joins = Boolean.parseBoolean(properties.getProperty(JOINS));
@@ -239,6 +280,7 @@ public class Tpcc implements TpccConstants {
         System.out.printf("<Parameters>\n");
 
         System.out.printf("     [driver]: %s\n", javaDriver);
+        System.out.printf(" [datasource]: %s\n", jdbcDataSource);
         System.out.printf("        [URL]: %s\n", jdbcUrl);
         System.out.printf("       [user]: %s\n", dbUser);
         System.out.printf("       [pass]: %s\n", dbPassword);
@@ -253,6 +295,8 @@ public class Tpcc implements TpccConstants {
 
         Util.seqInit(10, 10, 1, 1, 1);
 
+        /* set up database connection */
+        jdbcProps = makeJdbcProperties();
 
         /* set up threads */
 
@@ -263,7 +307,7 @@ public class Tpcc implements TpccConstants {
 
         for (int i = 0; i < numConn; i++) {
             Runnable worker = new TpccThread(i, port, 1, dbUser, dbPassword, numWare, numConn,
-                    javaDriver, jdbcUrl, fetchSize,
+                    javaDriver, jdbcDataSource, jdbcUrl, fetchSize,
                     success, late, retry, failure, success2, late2, retry2, failure2, joins);
             executor.execute(worker);
         }
