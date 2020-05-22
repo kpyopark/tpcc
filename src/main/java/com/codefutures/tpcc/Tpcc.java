@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
+import java.sql.Connection;
 import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.Map;
@@ -165,6 +166,24 @@ public class Tpcc implements TpccConstants {
         }
     }
 
+    private void testDataSource() {
+        int maxConTest = 5;
+        int conPos = 0;
+        Connection con[] = new Connection[maxConTest];
+        try {
+            for(; conPos < maxConTest; conPos++) {
+                con[conPos] = this.ds.getConnection();
+            }
+            for (; conPos < maxConTest; conPos++) {
+                con[conPos].close();
+            }
+        } catch (Exception e) {
+            logger.error(e.toString());
+        } finally {
+            throw new RuntimeException("Multi connections can't be established. ");
+        }
+    }
+
     private int runBenchmark(final boolean overridePropertiesFile, final String[] argv) {
 
         System.out.println("***************************************");
@@ -321,6 +340,8 @@ public class Tpcc implements TpccConstants {
         /* set up database datasource */
         makeJdbcDriverProperties();
         makeDataSource();
+
+        testDataSource();
 
         /* set up threads */
 

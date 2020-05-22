@@ -74,6 +74,7 @@ public class Driver implements TpccConstants {
     boolean joins = false;
 
     private void initalizeConnection() throws Exception {
+        logger.debug("DS:" + ds);
         this.conn = ds.getConnection();
         conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
         conn.setAutoCommit(false);
