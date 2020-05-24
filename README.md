@@ -2,6 +2,20 @@ Java TPC-C
 ==========
 
 This project is a Java implementation of the TPC-C benchmark.
+This project is modified to use mariadb jdbc datasource and to test mariadb jdbc fail-over transition time.
+
+I add a test script (simulate.sh)
+
+Before to test fail-over transition time, you should modify tpcc.properties and simulate.sh files. 
+You should set aws credentials or set EC2 instance profile(Role) to execute 'aws rds describe-cluster' and 'aws rds failover-db-cluster' apis.
+
+And simulate.sh script includes some 'sudo' commands to simulate underlying host failure.
+So, you should execute this script like below.
+
+# sudo -u ec2-user ./simulate.sh
+
+This script will make 6 output_{$tcp_retries}.txt files. 
+
 
 =========
 Compiling
