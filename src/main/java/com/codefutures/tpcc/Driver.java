@@ -2,6 +2,7 @@ package com.codefutures.tpcc;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTransientConnectionException;
 import java.util.Arrays;
 import java.util.concurrent.*;
@@ -73,6 +74,20 @@ public class Driver implements TpccConstants {
 
     int fetchSize = 0;
     boolean joins = false;
+
+
+    private void waitUntilToMakeConnection() {
+        boolean isInitialized = false;
+        while (!isInitialized) {
+            try {
+                initalizeConnection();
+                isInitialized = true;
+            } catch (Exception e) {
+                logger.warn("INITIALIZE CONNECTION ERROR. IT MIGHT BE THE LOST CONNECTION BETWEEN CLIENT AND HOST.");
+                logger.warn(e.toString());
+            }
+        }
+    }
 
     private void initalizeConnection() throws Exception {
         logger.debug("DS:" + ds);
@@ -341,6 +356,7 @@ public class Driver implements TpccConstants {
             retry2[0][t_num]--;
             failure[0]++;
             failure2[0][t_num]++;
+            waitUntilToMakeConnection();
         }
 
         return (0);
@@ -453,6 +469,7 @@ public class Driver implements TpccConstants {
             retry2[1][t_num]--;
             failure[1]++;
             failure2[1][t_num]++;
+            waitUntilToMakeConnection();
         }
 
         return (0);
@@ -534,6 +551,7 @@ public class Driver implements TpccConstants {
             retry2[2][t_num]--;
             failure[2]++;
             failure2[2][t_num]++;
+            waitUntilToMakeConnection();
         }
 
         return (0);
@@ -598,6 +616,7 @@ public class Driver implements TpccConstants {
             retry2[3][t_num]--;
             failure[3]++;
             failure2[3][t_num]++;
+            waitUntilToMakeConnection();
         }
 
         return (0);
@@ -667,6 +686,7 @@ public class Driver implements TpccConstants {
             retry2[4][t_num]--;
             failure[4]++;
             failure2[4][t_num]++;
+            waitUntilToMakeConnection();
         }
 
         return (0);
