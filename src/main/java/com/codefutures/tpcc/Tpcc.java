@@ -176,11 +176,19 @@ public class Tpcc implements TpccConstants {
             }
             for (; conPos < maxConTest; conPos++) {
                 con[conPos].close();
+		con[conPos] = null;
             }
         } catch (Exception e) {
             logger.error(e.toString());
-        } finally {
             throw new RuntimeException("Multi connections can't be established. ");
+        } finally {
+	    conPos = 0;
+            for (; conPos < maxConTest; conPos++) {
+                try {
+                    con[conPos].close();
+		} catch (Exception nne) { nne.printStackTrace(); } 
+		con[conPos] = null;
+            }
         }
     }
 
