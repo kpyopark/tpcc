@@ -2,6 +2,7 @@ package com.codefutures.tpcc;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.SQLTransientConnectionException;
 import java.util.Arrays;
 import java.util.concurrent.*;
 
@@ -201,18 +202,27 @@ public class Driver implements TpccConstants {
     }
 
     private void doNextTransaction(int t_num, int sequence) throws SQLException {
-        if (sequence == 0) {
-            doNeword(t_num);
-        } else if (sequence == 1) {
-            doPayment(t_num);
-        } else if (sequence == 2) {
-            doOrdstat(t_num);
-        } else if (sequence == 3) {
-            doDelivery(t_num);
-        } else if (sequence == 4) {
-            doSlev(t_num);
-        } else {
-            throw new IllegalStateException("Error - Unknown sequence");
+        long beginTime = System.currentTimeMillis();
+        try {
+            if (sequence == 0) {
+                doNeword(t_num);
+            } else if (sequence == 1) {
+                doPayment(t_num);
+            } else if (sequence == 2) {
+                doOrdstat(t_num);
+            } else if (sequence == 3) {
+                doDelivery(t_num);
+            } else if (sequence == 4) {
+                doSlev(t_num);
+            } else {
+                throw new IllegalStateException("Error - Unknown sequence");
+            }
+        } catch (SQLException sqle) {
+            if(sqle instanceof SQLTransientConnectionException) {
+                long endTime = System.currentTimeMillis();
+                logger.error("Connection Timeout Elapsed Time(S) :" + (endTime - beginTime)/1000);
+            }
+            throw sqle;
         }
     }
 
@@ -276,34 +286,39 @@ public class Driver implements TpccConstants {
             }
             qty[i] = Util.randomNumber(1, 10);
         }
-
         beginTime = System.currentTimeMillis();
         for (i = 0; i < MAX_RETRY; i++) {
             if (DEBUG)
-                logger.debug("t_num: " + t_num + " w_id: " + w_id + " c_id: " + c_id + " ol_cnt: " + ol_cnt + " all_local: " + all_local + " qty: " + Arrays.toString(qty));
+                logger.debug("t_num: " + t_num + " w_id: " + w_id + " c_id: " + c_id + " ol_cnt: " + ol_cnt
+                        + " all_local: " + all_local + " qty: " + Arrays.toString(qty));
             ret = newOrder.neword(t_num, w_id, d_id, c_id, ol_cnt, all_local, itemid, supware, qty);
             endTime = System.currentTimeMillis();
 
             if (ret == 1) {
 
                 rt = (double) (endTime - beginTime);
-                if (DEBUG) logger.debug("BEFORE rt value: " + rt + " max_rt[0] value: " + max_rt[0]);
+                if (DEBUG)
+                    logger.debug("BEFORE rt value: " + rt + " max_rt[0] value: " + max_rt[0]);
 
                 if (rt > max_rt[0])
                     max_rt[0] = rt;
 
-                if (DEBUG) logger.debug("AFTER rt value: " + rt + " max_rt[0] value: " + max_rt[0]);
+                if (DEBUG)
+                    logger.debug("AFTER rt value: " + rt + " max_rt[0] value: " + max_rt[0]);
 
                 RtHist.histInc(0, rt);
 
                 if (Tpcc.counting_on) {
-                    if (DEBUG) logger.debug(" rt: " + rt + " RTIME_NEWORD " + RTIME_NEWORD);
+                    if (DEBUG)
+                        logger.debug(" rt: " + rt + " RTIME_NEWORD " + RTIME_NEWORD);
                     if (rt < RTIME_NEWORD) {
-                        if (DEBUG) logger.debug("Rt < RTIME_NEWORD");
+                        if (DEBUG)
+                            logger.debug("Rt < RTIME_NEWORD");
                         success[0]++;
                         success2[0][t_num]++;
                     } else {
-                        if (DEBUG) logger.debug("Rt > RTIME_NEWORD");
+                        if (DEBUG)
+                            logger.debug("Rt > RTIME_NEWORD");
                         late[0]++;
                         late2[0][t_num]++;
                     }
@@ -320,7 +335,7 @@ public class Driver implements TpccConstants {
 
             }
         }
-
+  
         if (Tpcc.counting_on) {
             retry[0]--;
             retry2[0][t_num]--;
