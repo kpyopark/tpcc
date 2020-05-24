@@ -12,7 +12,9 @@ You should set aws credentials or set EC2 instance profile(Role) to execute 'aws
 And simulate.sh script includes some 'sudo' commands to simulate underlying host failure.
 So, you should execute this script like below.
 
-# sudo -u ec2-user ./simulate.sh
+<code>
+$ sudo -u ec2-user ./simulate.sh
+</code>
 
 This script will make 6 output_{$tcp_retries}.txt files. 
 
